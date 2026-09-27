@@ -2,9 +2,13 @@ import cv2
 import numpy as np
 import base64
 import time
+import threading
 from typing import Dict, Any, List, Optional
 import mediapipe as mp
 from .config import settings
+
+# Thread lock for MediaPipe processing (not thread-safe by default in C++ backend)
+_vision_lock = threading.Lock()
 
 # Initialize MediaPipe Solutions once globally for high throughput
 mp_face_detection = mp.solutions.face_detection
@@ -165,10 +169,22 @@ def analyze_proctor_frame(image_str: str, student_id: str, exam_id: str) -> Dict
     # Convert to RGB for MediaPipe processing
     rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
-    # 2. Face Presence & Count Detection
-    detection_results = face_detector.process(rgb_img)
-    faces = detection_results.detections if detection_results else []
-    face_count = len(faces) if faces else 0
+    # Clean tracker if too many entries (prevent memory leak)
+    if len(candidate_down_tracker) > 500:
+        cutoff = now - 3600
+        stale_keys = [k for k, v in candidate_down_tracker.items() if v < cutoff]
+        for k in stale_keys:
+            candidate_down_tracker.pop(k, None)
+
+    # 2. Face Presence & Count Detection (Thread-safe inference)
+    with _vision_lock:
+        detection_results = face_detector.process(rgb_img)
+        faces = detection_results.detections if detection_results else []
+        face_count = len(faces) if faces else 0
+
+        mesh_results = None
+        if face_count == 1:
+            mesh_results = face_mesh.process(rgb_img)
 
     if face_count == 0:
         candidate_down_tracker.pop(student_id, None)
@@ -195,7 +211,6 @@ def analyze_proctor_frame(image_str: str, student_id: str, exam_id: str) -> Dict
         }
 
     # 3. 3D Head Pose & Gaze Tracking (1 Face detected)
-    mesh_results = face_mesh.process(rgb_img)
     head_pose = {"yaw": 0.0, "pitch": 0.0, "roll": 0.0}
 
     if mesh_results and mesh_results.multi_face_landmarks:
