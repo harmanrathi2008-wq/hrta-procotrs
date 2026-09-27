@@ -215,7 +215,6 @@ def verify_cloudflare_edge_shield(headers: Dict[str, str], path: str, client_ip:
     if expected_secret and incoming_secret:
         if hmac.compare_digest(expected_secret.encode("utf-8"), incoming_secret.encode("utf-8")):
             return True, "TIER_A_TOKEN_VERIFIED"
-        return False, "Invalid edge secret token provided."
 
     # TIER B: Cloudflare headers presence check
     cf_ip = headers.get("cf-connecting-ip")
