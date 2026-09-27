@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: hrta-proctor-engine
+    env: docker
+    dockerfilePath: Dockerfile
+    plan: free
+    region: oregon
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPER_ADMIN_SECRET
+        sync: false
+      - key: MAIN_API_URL
+        value: https://api.hrtacbt.in
+      - key: ROUGH_WORK_TOLERANCE_SECONDS
+        value: 30
