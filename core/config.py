@@ -22,7 +22,7 @@ try:
         YAW_LOOK_AWAY_THRESHOLD_DEG: float = 28.0  # Angle threshold for looking left/right
         
         # Rate Limiting & Max Payload
-        MAX_REQUESTS_PER_MINUTE: int = int(os.getenv("MAX_REQUESTS_PER_MINUTE", "120"))
+        MAX_REQUESTS_PER_MINUTE: int = int(os.getenv("MAX_REQUESTS_PER_MINUTE", "240"))
         MAX_PAYLOAD_BYTES: int = 5 * 1024 * 1024  # 5 MB max frame body
 
         # Allowed CORS Origins
@@ -59,7 +59,7 @@ except ImportError:
         ROUGH_WORK_TOLERANCE_SECONDS: int = int(os.getenv("ROUGH_WORK_TOLERANCE_SECONDS", "30"))
         PITCH_DOWN_THRESHOLD_DEG: float = 12.0
         YAW_LOOK_AWAY_THRESHOLD_DEG: float = 28.0
-        MAX_REQUESTS_PER_MINUTE: int = int(os.getenv("MAX_REQUESTS_PER_MINUTE", "120"))
+        MAX_REQUESTS_PER_MINUTE: int = int(os.getenv("MAX_REQUESTS_PER_MINUTE", "240"))
         MAX_PAYLOAD_BYTES: int = 5 * 1024 * 1024
         ALLOWED_ORIGINS: list = [
             "https://hrtacbt.in",
