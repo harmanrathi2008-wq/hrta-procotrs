@@ -10,6 +10,7 @@ from typing import Optional, Dict, Any
 from core.config import settings
 from core.security import (
     build_forbidden_html_page,
+    build_proctor_landing_page,
     is_direct_browser_request,
     verify_cloudflare_edge_shield,
     is_valid_host,
@@ -44,7 +45,7 @@ app.add_middleware(
 async def hrta_edge_security_middleware(request: Request, call_next):
     """
     Enterprise-Grade Security Middleware Pipeline:
-    1. Direct browser navigation blocker (403 WAF HTML gate)
+    1. Direct browser navigation handler (NTA status page on root, 403 WAF gate on sub-paths)
     2. Cloudflare Edge Shield (Tier A token + Tier B CF-Ray verification)
     3. Host header poisoning protection
     4. Cross-origin authorization validation
@@ -76,8 +77,13 @@ async def hrta_edge_security_middleware(request: Request, call_next):
         )
 
     # 3. Direct Browser Navigation Interception
-    # Replaces raw JSON or root endpoints with an authentic 403 WAF HTML gate
+    # Renders an authoritative NTA/HRTA status terminal on root, and a 403 WAF HTML gate on sub-paths
     if is_direct_browser_request(headers):
+        if path in ("/", ""):
+            return HTMLResponse(
+                content=build_proctor_landing_page(client_ip, ray_id),
+                status_code=status.HTTP_200_OK
+            )
         return HTMLResponse(
             content=build_forbidden_html_page(client_ip, ray_id, "Direct Browser Navigation Prohibited by Security Policy"),
             status_code=status.HTTP_403_FORBIDDEN

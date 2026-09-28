@@ -1,0 +1,50 @@
+name: 24/7 Proctor & API Uptime Sentinel
+
+on:
+  schedule:
+    # Runs every 8 minutes (Render sleeps after 15 mins; 8 mins ensures 100% 24/7 uptime)
+    - cron: '*/8 * * * *'
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  uptime-pulse:
+    name: Ping Proctor & API Services
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Ping HRTA Cloud Proctor Engine (proctor.hrtacbt.in)
+        run: |
+          echo "Pinging HRTA Cloud Proctor Engine..."
+          PROCTOR_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) HRTA-Sentinel/2.0" \
+            -H "Accept: application/json" \
+            --connect-timeout 10 \
+            --max-time 30 \
+            https://proctor.hrtacbt.in/health)
+          echo "HRTA Proctor Engine returned HTTP $PROCTOR_CODE"
+          if [ "$PROCTOR_CODE" -ne 200 ]; then
+            echo "::warning ::Proctor engine responded with HTTP $PROCTOR_CODE"
+          else
+            echo "✅ HRTA Cloud Proctor Engine is online and operational."
+          fi
+
+      - name: Ping HRTA Central API Backend (api.hrtacbt.in)
+        run: |
+          echo "Pinging HRTA Central API Backend..."
+          API_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) HRTA-Sentinel/2.0" \
+            -H "Accept: application/json" \
+            --connect-timeout 10 \
+            --max-time 30 \
+            https://api.hrtacbt.in/api/health)
+          echo "HRTA Central API returned HTTP $API_CODE"
+          if [ "$API_CODE" -ne 200 ]; then
+            echo "::warning ::Central API responded with HTTP $API_CODE"
+          else
+            echo "✅ HRTA Central API is online and operational."
+          fi

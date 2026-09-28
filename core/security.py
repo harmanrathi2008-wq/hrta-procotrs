@@ -170,6 +170,221 @@ def build_forbidden_html_page(client_ip: str, ray_id: str, reason: str = "Access
 </html>"""
 
 
+def build_proctor_landing_page(client_ip: str, ray_id: str) -> str:
+    """
+    Renders an official, authoritative NTA/HRTA Cloud AI Proctoring Node
+    operational status terminal for proctor.hrtacbt.in.
+    """
+    timestamp = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime())
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HRTA Cloud AI Proctoring Node — Operational 24/7</title>
+<style>
+  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+  body {{
+    background-color: #070a13;
+    color: #cbd5e1;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }}
+  .container {{
+    max-width: 680px;
+    width: 100%;
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 16px;
+    padding: 36px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+  }}
+  .badge-row {{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+  }}
+  .brand-badge {{
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(14, 165, 233, 0.1);
+    border: 1px solid rgba(14, 165, 233, 0.3);
+    color: #38bdf8;
+    padding: 6px 12px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }}
+  .live-indicator {{
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #34d399;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }}
+  .pulse-dot {{
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 10px #10b981;
+    animation: pulse 2s infinite;
+  }}
+  @keyframes pulse {{
+    0%, 100% {{ opacity: 1; transform: scale(1); }}
+    50% {{ opacity: 0.5; transform: scale(1.2); }}
+  }}
+  h1 {{
+    font-size: 22px;
+    font-weight: 800;
+    color: #f8fafc;
+    letter-spacing: -0.02em;
+    margin-bottom: 6px;
+  }}
+  .subtitle {{
+    font-size: 13px;
+    color: #94a3b8;
+    margin-bottom: 24px;
+    line-height: 1.5;
+  }}
+  .grid {{
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+  }}
+  .card {{
+    background: #090e1a;
+    border: 1px solid #1e293b;
+    border-radius: 10px;
+    padding: 14px;
+  }}
+  .card-label {{
+    font-size: 11px;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+  }}
+  .card-value {{
+    font-size: 13px;
+    font-weight: 700;
+    color: #f1f5f9;
+  }}
+  .card-value.green {{ color: #34d399; }}
+  .card-value.cyan {{ color: #38bdf8; }}
+  .details-box {{
+    background: #090e1a;
+    border: 1px solid #1e293b;
+    border-radius: 10px;
+    padding: 14px 18px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    color: #94a3b8;
+    margin-bottom: 24px;
+  }}
+  .details-row {{
+    display: flex;
+    justify-content: space-between;
+    padding: 5px 0;
+    border-bottom: 1px dashed #1e293b;
+  }}
+  .details-row:last-child {{ border-bottom: none; }}
+  .action-btn {{
+    display: block;
+    width: 100%;
+    text-align: center;
+    background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 12px 20px;
+    border-radius: 10px;
+    text-decoration: none;
+    transition: opacity 0.2s;
+  }}
+  .action-btn:hover {{ opacity: 0.9; }}
+  .footer {{
+    margin-top: 20px;
+    text-align: center;
+    font-size: 11px;
+    color: #475569;
+  }}
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="badge-row">
+      <span class="brand-badge">HRTA &bull; National Testing Architecture</span>
+      <span class="live-indicator"><span class="pulse-dot"></span> Online 24/7</span>
+    </div>
+
+    <h1>Autonomous AI Cloud Proctoring Engine</h1>
+    <p class="subtitle">
+      Dedicated real-time Computer Vision proctoring microservice powering high-integrity NTA standard examinations on <strong>hrtacbt.in</strong>.
+    </p>
+
+    <div class="grid">
+      <div class="card">
+        <div class="card-label">Visual Engine</div>
+        <div class="card-value cyan">MediaPipe 3D Pose & Mesh</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Rough Work Tolerance</div>
+        <div class="card-value green">75s Calibrated Window</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Edge Shield</div>
+        <div class="card-value green">Cloudflare WAF Tier A/B</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Uptime Sentinel</div>
+        <div class="card-value green">Keep-Alive 24&times;7 Active</div>
+      </div>
+    </div>
+
+    <div class="details-box">
+      <div class="details-row">
+        <span>Endpoint Node</span>
+        <span style="color:#f1f5f9; font-weight:600;">proctor.hrtacbt.in</span>
+      </div>
+      <div class="details-row">
+        <span>Your IP Address</span>
+        <span style="color:#f1f5f9;">{client_ip}</span>
+      </div>
+      <div class="details-row">
+        <span>Cloudflare Ray ID</span>
+        <span style="color:#38bdf8;">{ray_id}</span>
+      </div>
+      <div class="details-row">
+        <span>Server Time</span>
+        <span style="color:#94a3b8;">{timestamp}</span>
+      </div>
+    </div>
+
+    <a href="https://hrtacbt.in" class="action-btn">Launch Official HRTA CBT Portal</a>
+
+    <div class="footer">
+      Harman Rathi Testing Agency (HRTA) &bull; National Examination Security Architecture &bull; All Rights Reserved
+    </div>
+  </div>
+</body>
+</html>"""
+
+
 def is_direct_browser_request(headers: Dict[str, str]) -> bool:
     """
     Detects if the incoming request originates from a user directly entering

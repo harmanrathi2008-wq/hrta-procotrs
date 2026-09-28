@@ -17,9 +17,9 @@ try:
         CLOUDFLARE_SECRET_TOKEN: str = os.getenv("CLOUDFLARE_SECRET_TOKEN", "")
         
         # Exam Solving Tolerances (Academic JEE / NEET Solving Settings)
-        ROUGH_WORK_TOLERANCE_SECONDS: int = int(os.getenv("ROUGH_WORK_TOLERANCE_SECONDS", "30"))
-        PITCH_DOWN_THRESHOLD_DEG: float = 12.0  # Angle threshold for looking down at rough paper
-        YAW_LOOK_AWAY_THRESHOLD_DEG: float = 28.0  # Angle threshold for looking left/right
+        ROUGH_WORK_TOLERANCE_SECONDS: int = int(os.getenv("ROUGH_WORK_TOLERANCE_SECONDS", "75"))
+        PITCH_DOWN_THRESHOLD_DEG: float = 20.0  # Angle threshold for looking down at rough paper (accommodates normal monitor reading)
+        YAW_LOOK_AWAY_THRESHOLD_DEG: float = 38.0  # Angle threshold for looking left/right (permits wide screens & question palette viewing)
         
         # Rate Limiting & Max Payload
         MAX_REQUESTS_PER_MINUTE: int = int(os.getenv("MAX_REQUESTS_PER_MINUTE", "240"))
@@ -56,9 +56,9 @@ except ImportError:
         SUPER_ADMIN_SECRET: str = os.getenv("SUPER_ADMIN_SECRET", "")
         MAIN_API_URL: str = os.getenv("MAIN_API_URL", "https://api.hrtacbt.in")
         CLOUDFLARE_SECRET_TOKEN: str = os.getenv("CLOUDFLARE_SECRET_TOKEN", "")
-        ROUGH_WORK_TOLERANCE_SECONDS: int = int(os.getenv("ROUGH_WORK_TOLERANCE_SECONDS", "30"))
-        PITCH_DOWN_THRESHOLD_DEG: float = 12.0
-        YAW_LOOK_AWAY_THRESHOLD_DEG: float = 28.0
+        ROUGH_WORK_TOLERANCE_SECONDS: int = int(os.getenv("ROUGH_WORK_TOLERANCE_SECONDS", "75"))
+        PITCH_DOWN_THRESHOLD_DEG: float = 20.0
+        YAW_LOOK_AWAY_THRESHOLD_DEG: float = 38.0
         MAX_REQUESTS_PER_MINUTE: int = int(os.getenv("MAX_REQUESTS_PER_MINUTE", "240"))
         MAX_PAYLOAD_BYTES: int = 5 * 1024 * 1024
         ALLOWED_ORIGINS: list = [
