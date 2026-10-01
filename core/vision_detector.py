@@ -258,8 +258,8 @@ def analyze_proctor_frame(image_str: str, student_id: str, exam_id: str) -> Dict
             }
 
         missing_duration = now - first_missing_time
-        if missing_duration < 3.5:
-            # Within 3.5 second grace period (normal blink, scratch, momentary head turn)
+        if missing_duration < 0.8:
+            # Brief micro-grace (normal blink or instantaneous adjustment)
             return {
                 "status": "CLEAR",
                 "face_count": 0,
@@ -267,10 +267,10 @@ def analyze_proctor_frame(image_str: str, student_id: str, exam_id: str) -> Dict
                 "warning": None,
                 "penalty": 0,
                 "risk_score_increment": 0,
-                "note": f"Face obscured ({round(missing_duration, 1)}s/3.5s). Suppressing warning."
+                "note": f"Face obscured ({round(missing_duration, 1)}s/0.8s). Suppressing warning."
             }
         else:
-            # Sustained absence confirmed
+            # Sustained absence confirmed in real-time
             return {
                 "status": "VIOLATION",
                 "violation": "NO_FACE_DETECTED",
@@ -303,7 +303,7 @@ def analyze_proctor_frame(image_str: str, student_id: str, exam_id: str) -> Dict
             }
 
         multi_duration = now - first_multi_time
-        if multi_duration < 2.0:
+        if multi_duration < 0.5:
             return {
                 "status": "CLEAR",
                 "mode": "VERIFYING_MULTI_FACE",
@@ -381,7 +381,7 @@ def analyze_proctor_frame(image_str: str, student_id: str, exam_id: str) -> Dict
             }
 
         yaw_duration = now - yaw_record["start"]
-        if yaw_duration < 1.0:
+        if yaw_duration < 0.6:
             return {
                 "status": "CLEAR",
                 "mode": "GAZE_GRACE",
@@ -440,7 +440,7 @@ def analyze_proctor_frame(image_str: str, student_id: str, exam_id: str) -> Dict
     else:
         candidate_down_tracker.pop(student_id, None)
 
-    # 5. Mobile Phone Screen & Gadget Detection (Debounced with 2.5s Persistence)
+    # 5. Mobile Phone Screen & Gadget Detection (Responsive 0.6s Persistence)
     device_found = detect_illuminated_device(img)
     if device_found:
         first_device_time = candidate_device_tracker.get(student_id)
@@ -456,7 +456,7 @@ def analyze_proctor_frame(image_str: str, student_id: str, exam_id: str) -> Dict
             }
 
         device_duration = now - first_device_time
-        if device_duration >= 2.5:
+        if device_duration >= 0.6:
             return {
                 "status": "VIOLATION",
                 "violation": "CELL_PHONE_OR_DEVICE_DETECTED",
