@@ -44,6 +44,37 @@ candidate_missing_face_tracker: Dict[str, float] = {}
 candidate_multi_face_tracker: Dict[str, float] = {}
 candidate_yaw_tracker: Dict[str, Dict[str, Any]] = {}
 candidate_device_tracker: Dict[str, float] = {}
+candidate_down_gaze_tracker: Dict[str, float] = {}
+
+
+def check_downward_eye_gaze(landmarks) -> bool:
+    """
+    Evaluates whether the candidate's eyes are looking down while their face is facing the screen.
+    Left eye: top 159, bottom 145, iris 468.
+    Right eye: top 386, bottom 374, iris 473.
+    """
+    try:
+        l_top = landmarks[159].y
+        l_bot = landmarks[145].y
+        l_iris = landmarks[468].y
+
+        r_top = landmarks[386].y
+        r_bot = landmarks[374].y
+        r_iris = landmarks[473].y
+
+        l_height = abs(l_bot - l_top)
+        r_height = abs(r_bot - r_top)
+
+        if l_height > 0.005 and r_height > 0.005:
+            l_ratio = (l_iris - l_top) / l_height
+            r_ratio = (r_iris - r_top) / r_height
+            avg_ratio = (l_ratio + r_ratio) / 2.0
+            if avg_ratio >= 0.63:
+                return True
+    except Exception:
+        pass
+    return False
+
 
 def decode_image_base64(image_str: str) -> Optional[np.ndarray]:
     """Decodes data URI or raw base64 string to OpenCV BGR image"""
@@ -304,10 +335,36 @@ def analyze_proctor_frame(image_str: str, student_id: str, exam_id: str) -> Dict
     yaw = head_pose["yaw"]
     pitch = head_pose["pitch"]
 
-    # 3. Gaze Deviation: Looking Away (Yaw > 38°) with 3.5s Temporal Persistence
-    is_looking_left_right = abs(yaw) > settings.YAW_LOOK_AWAY_THRESHOLD_DEG
-    if is_looking_left_right:
-        direction = "RIGHT" if yaw > 0 else "LEFT"
+    # 3. Head Facing Screen with Downward Eyes (Stealth Phone/Notes Cheating Detection)
+    # If candidate is facing the screen (pitch/yaw near 0) but eyes are looking down, flag as cheating
+    is_head_facing_screen = abs(pitch) <= 15.0 and abs(yaw) <= 22.0
+    if is_head_facing_screen and mesh_results and mesh_results.multi_face_landmarks:
+        if check_downward_eye_gaze(landmarks):
+            first_down_gaze = candidate_down_gaze_tracker.get(student_id)
+            if not first_down_gaze:
+                candidate_down_gaze_tracker[student_id] = now
+            elif now - first_down_gaze >= 0.5:
+                return {
+                    "status": "VIOLATION",
+                    "violation": "SUSPICIOUS_EYE_GAZE",
+                    "face_count": 1,
+                    "head_pose": head_pose,
+                    "warning": "Warning: Downward eye gaze detected while facing screen. Keep your eyes on the exam screen.",
+                    "penalty": 5,
+                    "risk_score_increment": 5,
+                    "details": {**head_pose, "gaze": "DOWN_EYES_SCREEN_FACE"}
+                }
+        else:
+            candidate_down_gaze_tracker.pop(student_id, None)
+    else:
+        candidate_down_gaze_tracker.pop(student_id, None)
+
+    # 4. Unwanted Head Movement: Looking Sideways or Looking Up (Strict evaluation)
+    # Downside head movement is explicitly allowed for rough work, but sideways and upwards are prohibited
+    is_looking_sideways = abs(yaw) > 22.0
+    is_looking_up = pitch < -16.0
+    if is_looking_sideways or is_looking_up:
+        direction = "UP" if is_looking_up else ("RIGHT" if yaw > 0 else "LEFT")
         candidate_down_tracker.pop(student_id, None)
         
         yaw_record = candidate_yaw_tracker.get(student_id)
@@ -324,8 +381,7 @@ def analyze_proctor_frame(image_str: str, student_id: str, exam_id: str) -> Dict
             }
 
         yaw_duration = now - yaw_record["start"]
-        if yaw_duration < 3.5:
-            # Allowed momentary glances at timer / question palette / screen corners
+        if yaw_duration < 1.0:
             return {
                 "status": "CLEAR",
                 "mode": "GAZE_GRACE",
@@ -335,15 +391,14 @@ def analyze_proctor_frame(image_str: str, student_id: str, exam_id: str) -> Dict
                 "risk_score_increment": 0
             }
         else:
-            # Sustained head turn away from monitor
             return {
                 "status": "VIOLATION",
                 "violation": f"LOOKING_AWAY_{direction}",
                 "face_count": 1,
                 "head_pose": head_pose,
-                "warning": f"Notice: Please focus your eyes on the exam screen. Looking away ({direction.lower()}) detected.",
-                "penalty": 3,
-                "risk_score_increment": 3,
+                "warning": f"Notice: Unwanted head movement ({direction.lower()}) detected. Please look straight at the screen.",
+                "penalty": 4,
+                "risk_score_increment": 4,
                 "details": {**head_pose, "sustained_seconds": round(yaw_duration, 1)}
             }
     else:

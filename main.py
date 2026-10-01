@@ -43,6 +43,27 @@ app.add_middleware(
 )
 
 
+def attach_cors_headers(response: Response, origin: Optional[str] = None) -> Response:
+    allowed_origin = "https://hrtacbt.in"
+    if origin:
+        cleaned = origin.strip().lower()
+        if is_valid_origin(cleaned):
+            try:
+                from urllib.parse import urlparse
+                parsed = urlparse(cleaned)
+                if parsed.scheme and parsed.netloc:
+                    allowed_origin = f"{parsed.scheme}://{parsed.netloc}"
+                else:
+                    allowed_origin = cleaned.split('/')[0]
+            except Exception:
+                allowed_origin = "https://hrtacbt.in"
+    response.headers["Access-Control-Allow-Origin"] = allowed_origin
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS, HEAD"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, x-student-id, x-exam-session-token, x-session-token, x-render-secret, x-hrta-edge-secret, x-hrta-csrf, *"
+    return response
+
+
 @app.middleware("http")
 async def hrta_edge_security_middleware(request: Request, call_next):
     """
@@ -65,42 +86,48 @@ async def hrta_edge_security_middleware(request: Request, call_next):
         (request.client.host if request.client else "unknown")
     )
     ray_id = headers.get("cf-ray") or f"{secrets.token_hex(8)}-{int(time.time())}"
+    raw_origin = headers.get("origin") or headers.get("referer")
 
-    # 1. CORS Preflights proceed cleanly
+    # 1. CORS Preflights proceed cleanly with guaranteed CORS headers
     if method == "OPTIONS":
-        return await call_next(request)
+        resp = Response(status_code=204)
+        return attach_cors_headers(resp, raw_origin)
 
     # 2. Host Header Validation
     host_val = headers.get("host", "")
     if not is_valid_host(host_val):
-        return HTMLResponse(
+        resp = HTMLResponse(
             content=build_forbidden_html_page(client_ip, ray_id, "Untrusted Host Header Rejected"),
             status_code=status.HTTP_400_BAD_REQUEST
         )
+        return attach_cors_headers(resp, raw_origin)
 
     # 3. Direct Browser Navigation Interception
     # Renders an authoritative NTA/HRTA status terminal on root, and a 403 WAF HTML gate on sub-paths
     if is_direct_browser_request(headers):
         if path in ("/", ""):
-            return HTMLResponse(
+            resp = HTMLResponse(
                 content=build_proctor_landing_page(client_ip, ray_id),
                 status_code=status.HTTP_200_OK
             )
-        return HTMLResponse(
+            return attach_cors_headers(resp, raw_origin)
+        resp = HTMLResponse(
             content=build_forbidden_html_page(client_ip, ray_id, "Direct Browser Navigation Prohibited by Security Policy"),
             status_code=status.HTTP_403_FORBIDDEN
         )
+        return attach_cors_headers(resp, raw_origin)
 
     # 4. Cloudflare Edge Shield Enforcement
     shield_passed, shield_reason = verify_cloudflare_edge_shield(headers, path, client_ip)
     if not shield_passed:
         accept = headers.get("accept", "").lower()
         if "text/html" in accept:
-            return HTMLResponse(
+            resp = HTMLResponse(
                 content=build_forbidden_html_page(client_ip, ray_id, shield_reason),
                 status_code=status.HTTP_403_FORBIDDEN
             )
-        return JSONResponse(
+            return attach_cors_headers(resp, raw_origin)
+        resp = JSONResponse(
             status_code=status.HTTP_403_FORBIDDEN,
             content={
                 "error": "Direct Origin Access Forbidden",
@@ -108,48 +135,51 @@ async def hrta_edge_security_middleware(request: Request, call_next):
                 "rayId": ray_id
             }
         )
+        return attach_cors_headers(resp, raw_origin)
 
     # 5. Cross-Origin Validation
-    origin = headers.get("origin") or headers.get("referer")
-    if origin and not is_valid_origin(origin):
-        return JSONResponse(
+    if raw_origin and not is_valid_origin(raw_origin):
+        resp = JSONResponse(
             status_code=status.HTTP_403_FORBIDDEN,
             content={
                 "error": "Forbidden Origin",
                 "message": "Cross-origin request blocked by HRTA Proctor Shield."
             }
         )
+        return attach_cors_headers(resp, raw_origin)
 
     # 6. Sliding Window Rate Limiting (Skip for internal health checks)
     if path not in ("/health", "/api/health", MONITORING_ENDPOINT_PATH):
         if not check_rate_limit(client_ip):
-            return JSONResponse(
+            resp = JSONResponse(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 content={
                     "error": "Rate Limit Exceeded",
                     "message": "Too many requests to proctoring engine. Burst threshold exceeded."
                 }
             )
+            return attach_cors_headers(resp, raw_origin)
 
     # 7. Payload Size Clamping (Prevent Memory Exhaustion Attacks)
     content_length = request.headers.get("content-length")
     if content_length:
         try:
             if int(content_length) > settings.MAX_PAYLOAD_BYTES:
-                return JSONResponse(
+                resp = JSONResponse(
                     status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                     content={
                         "error": "Payload Too Large",
                         "message": f"Frame payload exceeds maximum allowable size of {settings.MAX_PAYLOAD_BYTES // (1024*1024)}MB."
                     }
                 )
+                return attach_cors_headers(resp, raw_origin)
         except ValueError:
             pass
 
     # Process Request
     response: Response = await call_next(request)
 
-    # 8. Inject Enterprise Defense-in-Depth Security Headers
+    # 8. Inject Enterprise Defense-in-Depth Security Headers + CORS
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'; sandbox;"
@@ -160,7 +190,7 @@ async def hrta_edge_security_middleware(request: Request, call_next):
     response.headers["Pragma"] = "no-cache"
     response.headers["Server"] = "cloudflare"
 
-    return response
+    return attach_cors_headers(response, raw_origin)
 
 
 class FrameInspectRequest(BaseModel):

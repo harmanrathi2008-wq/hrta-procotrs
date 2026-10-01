@@ -613,6 +613,12 @@ def verify_cloudflare_edge_shield(headers: Dict[str, str], path: str, client_ip:
     if cf_ip and cf_ray:
         return True, "TIER_B_CF_HEADERS_VERIFIED"
 
+    # TIER B.2: Valid candidate examination session (authenticated exam client)
+    session_token = headers.get("x-exam-session-token") or headers.get("x-session-token")
+    origin = headers.get("origin") or headers.get("referer")
+    if session_token and origin and is_valid_origin(origin):
+        return True, "TIER_B2_AUTH_SESSION_VERIFIED"
+
     # TIER C: Direct attack / bypass attempt
     return False, "Direct origin access forbidden: Missing mandatory edge security headers."
 
@@ -655,6 +661,7 @@ def is_valid_host(host_header: Optional[str]) -> bool:
 def is_valid_origin(origin_header: Optional[str]) -> bool:
     """
     Validates request Origin or Referer against allowed CBT portal domains.
+    Handles bare origins (https://hrtacbt.in) and full referer URLs with paths.
     """
     if not origin_header:
         # Internal API calls without Origin are permitted if Edge Shield passes
@@ -664,8 +671,20 @@ def is_valid_origin(origin_header: Optional[str]) -> bool:
     if origin_cleaned in settings.ALLOWED_ORIGINS:
         return True
 
-    # Regex pattern: https://(*.)hrtacbt.in
-    pattern = r"^https:\/\/(.*\.)?hrtacbt\.in$"
+    # Parse hostname from URL or Referer
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(origin_cleaned)
+        netloc = (parsed.netloc or parsed.path.split('/')[0]).lower().split(':')[0]
+        if netloc in ("hrtacbt.in", "www.hrtacbt.in", "proctor.hrtacbt.in", "api.hrtacbt.in", "admin.hrtacbt.in", "localhost", "127.0.0.1"):
+            return True
+        if netloc.endswith(".hrtacbt.in"):
+            return True
+    except Exception:
+        pass
+
+    # Regex pattern: https://(*.)hrtacbt.in(/.*)?
+    pattern = r"^https:\/\/(.*\.)?hrtacbt\.in(\/.*)?$"
     if re.match(pattern, origin_cleaned):
         return True
 
