@@ -230,6 +230,12 @@ async def inspect_proctor_frame(
     with MediaPipe + OpenCV, respects academic rough-work gaze tolerance,
     and logs verified infractions to the central database.
     """
+    if not x_exam_session_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="A verified exam session token is required."
+        )
+
     resolved_student_id = payload.studentId or x_student_id
     if not resolved_student_id or not payload.examId:
         raise HTTPException(
@@ -238,17 +244,16 @@ async def inspect_proctor_frame(
         )
 
     # 1. Cryptographic Exam Session Token Verification
-    if x_exam_session_token:
-        is_valid, reason = verify_exam_session_token(
-            x_exam_session_token,
-            payload.examId,
-            resolved_student_id
+    is_valid, reason = verify_exam_session_token(
+        x_exam_session_token,
+        payload.examId,
+        resolved_student_id
+    )
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Exam Terminal Session Verification Failed: {reason}"
         )
-        if not is_valid:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Exam Terminal Session Verification Failed: {reason}"
-            )
 
     # 2. Execute Real-Time Computer Vision Pipeline
     client_ip = request.headers.get("cf-connecting-ip") or (request.client.host if request.client else "unknown")
@@ -268,9 +273,9 @@ async def inspect_proctor_frame(
                 "head_pose": verdict.get("head_pose"),
                 "face_count": verdict.get("face_count"),
                 "warning": verdict.get("warning"),
-                "token": x_exam_session_token
             },
-            client_ip=client_ip
+            client_ip=client_ip,
+            session_token=x_exam_session_token
         )
         verdict["riskScore"] = db_res.get("new_risk_score", penalty)
 
@@ -290,17 +295,22 @@ async def inspect_proctor_audio(
     """
     Telemetry inspection endpoint for background ambient audio and whisper detection.
     """
-    if x_exam_session_token:
-        is_valid, reason = verify_exam_session_token(
-            x_exam_session_token,
-            payload.examId,
-            payload.studentId
+    if not x_exam_session_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="A verified exam session token is required."
         )
-        if not is_valid:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Session Verification Failed: {reason}"
-            )
+
+    is_valid, reason = verify_exam_session_token(
+        x_exam_session_token,
+        payload.examId,
+        payload.studentId
+    )
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Session Verification Failed: {reason}"
+        )
 
     is_violation = payload.speechDetected or payload.decibels > 78.0
     verdict = {

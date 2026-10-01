@@ -19,6 +19,8 @@ services:
         sync: false
       - key: MAIN_API_URL
         value: https://api.hrtacbt.in
+      - key: RENDER_HOSTNAME
+        sync: false
       - key: CLOUDFLARE_SECRET_TOKEN
         sync: false
       - key: ENVIRONMENT

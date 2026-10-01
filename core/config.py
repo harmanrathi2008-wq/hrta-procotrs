@@ -15,6 +15,7 @@ try:
         SUPER_ADMIN_SECRET: str = os.getenv("SUPER_ADMIN_SECRET", "")
         MONITORING_ENDPOINT_SECRET: str = os.getenv("MONITORING_ENDPOINT_SECRET", "")
         MAIN_API_URL: str = os.getenv("MAIN_API_URL", "https://api.hrtacbt.in")
+        RENDER_HOSTNAME: str = os.getenv("RENDER_HOSTNAME", "")
         CLOUDFLARE_SECRET_TOKEN: str = os.getenv("CLOUDFLARE_SECRET_TOKEN", "")
         
         # Exam Solving Tolerances (Academic JEE / NEET Solving Settings)
@@ -57,6 +58,7 @@ except ImportError:
         SUPER_ADMIN_SECRET: str = os.getenv("SUPER_ADMIN_SECRET", "")
         MONITORING_ENDPOINT_SECRET: str = os.getenv("MONITORING_ENDPOINT_SECRET", "")
         MAIN_API_URL: str = os.getenv("MAIN_API_URL", "https://api.hrtacbt.in")
+        RENDER_HOSTNAME: str = os.getenv("RENDER_HOSTNAME", "")
         CLOUDFLARE_SECRET_TOKEN: str = os.getenv("CLOUDFLARE_SECRET_TOKEN", "")
         ROUGH_WORK_TOLERANCE_SECONDS: int = int(os.getenv("ROUGH_WORK_TOLERANCE_SECONDS", "75"))
         PITCH_DOWN_THRESHOLD_DEG: float = 20.0

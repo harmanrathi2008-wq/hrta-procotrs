@@ -28,7 +28,8 @@ async def record_proctoring_violation(
     violation_type: str,
     penalty_increment: int,
     details: Optional[Dict[str, Any]] = None,
-    client_ip: str = "Unknown"
+    client_ip: str = "Unknown",
+    session_token: str = ""
 ) -> Dict[str, Any]:
     """
     Persists proctoring violation into Supabase proctoring_events
@@ -111,8 +112,8 @@ async def record_proctoring_violation(
     # 3. Notify Central Controller if configured
     if settings.MAIN_API_URL and httpx:
         try:
-            token_val = meta_dict.get("token", "")
             async with httpx.AsyncClient(timeout=2.0) as client:
+                headers = {"x-exam-session-token": session_token} if session_token else {}
                 await client.post(
                     f"{settings.MAIN_API_URL}/api/proctoring/events",
                     json={
@@ -122,7 +123,7 @@ async def record_proctoring_violation(
                         "payload": meta_dict,
                         "technical_or_behavioral": "behavioral"
                     },
-                    headers={"x-exam-session-token": str(token_val)}
+                    headers=headers
                 )
         except Exception:
             pass  # Non-fatal notification

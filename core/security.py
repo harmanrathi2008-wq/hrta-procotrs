@@ -3,6 +3,7 @@ import hmac
 import hashlib
 import re
 import secrets
+from html import escape
 from typing import Tuple, Optional, Dict, List
 from .config import settings
 
@@ -147,15 +148,15 @@ def build_forbidden_html_page(client_ip: str, ray_id: str, reason: str = "Access
     <div class="details-box">
       <div class="details-row">
         <span class="label">Reason</span>
-        <span class="val-danger">{reason}</span>
+        <span class="val-danger">{escape(str(reason))}</span>
       </div>
       <div class="details-row">
         <span class="label">Client IP</span>
-        <span class="val">{client_ip}</span>
+        <span class="val">{escape(str(client_ip))}</span>
       </div>
       <div class="details-row">
         <span class="label">Ray ID</span>
-        <span class="val">{ray_id}</span>
+        <span class="val">{escape(str(ray_id))}</span>
       </div>
       <div class="details-row">
         <span class="label">Timestamp</span>
@@ -365,11 +366,11 @@ def build_proctor_landing_page(client_ip: str, ray_id: str) -> str:
       </div>
       <div class="details-row">
         <span>Your IP Address</span>
-        <span style="color:#f1f5f9;">{client_ip}</span>
+        <span style="color:#f1f5f9;">{escape(str(client_ip))}</span>
       </div>
       <div class="details-row">
         <span>Cloudflare Ray ID</span>
-        <span style="color:#38bdf8;">{ray_id}</span>
+        <span style="color:#38bdf8;">{escape(str(ray_id))}</span>
       </div>
       <div class="details-row">
         <span>Server Time</span>
@@ -428,19 +429,15 @@ def verify_cloudflare_edge_shield(headers: Dict[str, str], path: str, client_ip:
         ""
     ).strip()
 
+    if not expected_secret:
+        return False, "Cloudflare edge secret is not configured."
+
     # TIER A: Secret token configured & matched
     if expected_secret and incoming_secret:
         if hmac.compare_digest(expected_secret.encode("utf-8"), incoming_secret.encode("utf-8")):
             return True, "TIER_A_TOKEN_VERIFIED"
 
-    # TIER B: Cloudflare headers presence check
-    cf_ip = headers.get("cf-connecting-ip")
-    cf_ray = headers.get("cf-ray")
-    if cf_ip and cf_ray:
-        return True, "TIER_B_CF_HEADERS_VERIFIED"
-
-    # TIER C: Direct attack / bypass attempt
-    return False, "Direct origin access forbidden: Missing mandatory edge security headers."
+    return False, "Direct origin access forbidden: Invalid Cloudflare edge secret."
 
 
 def verify_monitoring_authorization(authorization: Optional[str]) -> bool:
@@ -470,8 +467,9 @@ def is_valid_host(host_header: Optional[str]) -> bool:
     if host in settings.ALLOWED_HOSTS:
         return True
 
-    # Allow official subdomains of hrtacbt.in or temporary render testing domain
-    if host.endswith(".hrtacbt.in") or host.endswith(".onrender.com"):
+    if host in {"proctor.hrtacbt.in", "api.hrtacbt.in", "hrtacbt.in", "www.hrtacbt.in"}:
+        return True
+    if settings.RENDER_HOSTNAME and host == settings.RENDER_HOSTNAME.strip().lower():
         return True
 
     return False

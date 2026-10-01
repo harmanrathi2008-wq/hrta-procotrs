@@ -70,10 +70,10 @@ def run_all_tests():
     ok, reason = verify_cloudflare_edge_shield({}, "/api/v1/proctor/inspect", "192.168.1.50")
     assert_test("3a: Direct-to-origin request without CF headers or token is blocked (Tier C)", ok is False)
 
-    # Tier B: Valid CF headers present
+    # Cloudflare headers alone are not authentication.
     cf_headers = {"cf-connecting-ip": "103.21.244.15", "cf-ray": "89abc123-BOM"}
     ok_b, _ = verify_cloudflare_edge_shield(cf_headers, "/api/v1/proctor/inspect", "103.21.244.15")
-    assert_test("3b: Request through Cloudflare network (cf-connecting-ip + cf-ray) passes (Tier B)", ok_b is True)
+    assert_test("3b: Cloudflare headers without the edge secret are rejected", ok_b is False)
 
     # Tier A: Secret token present
     secret_headers = {"x-render-secret": "secret_cf_token_xyz987"}
@@ -91,8 +91,10 @@ def run_all_tests():
 
     # 4. Host Header Validation
     assert_test("4a: Canonical subdomain proctor.hrtacbt.in is allowed", is_valid_host("proctor.hrtacbt.in") is True)
-    assert_test("4b: Render app domain is allowed during deployment verification", is_valid_host("hrta-proctor-engine.onrender.com") is True)
-    assert_test("4c: Untrusted host header (attacker.com) is rejected", is_valid_host("attacker.evil.com") is False)
+    settings.RENDER_HOSTNAME = "hrta-proctor-engine.onrender.com"
+    assert_test("4b: Configured Render app domain is allowed during deployment verification", is_valid_host("hrta-proctor-engine.onrender.com") is True)
+    assert_test("4c: Unconfigured Render app domain is rejected", is_valid_host("other-service.onrender.com") is False)
+    assert_test("4d: Untrusted host header (attacker.com) is rejected", is_valid_host("attacker.evil.com") is False)
 
     # 5. Cross-Origin Validation
     assert_test("5a: Official portal origin https://hrtacbt.in is allowed", is_valid_origin("https://hrtacbt.in") is True)
