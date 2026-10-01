@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import time
 import hmac
 import hashlib
@@ -13,379 +14,551 @@ MONITORING_ENDPOINT_PATH = "/internal/monitor"
 _rate_limit_records: Dict[str, List[float]] = {}
 _last_cleanup_time: float = time.time()
 
-
-def build_forbidden_html_page(client_ip: str, ray_id: str, reason: str = "Access Denied — Edge Security Policy Violation") -> str:
-    """
-    Renders an enterprise-grade dark-theme 403 Forbidden WAF page.
-    Identical to the HRTA CBT Central Controller WAF gate, preventing backend
-    fingerprinting and blocking unauthorized direct browser exploration.
-    """
-    timestamp = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime())
-
-    return f"""<!DOCTYPE html>
+STEALTH_404_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>403 Forbidden — Security Protection Gateway</title>
+<title>404 &mdash; HRTA Secure Systems</title>
 <style>
-  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-  body {{
-    background-color: #0b0f19;
-    color: #cbd5e1;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  *, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    background-color: #030712;
+    color: #f8fafc;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', Helvetica, Arial, sans-serif;
     min-height: 100vh;
     display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    overflow-x: hidden;
+    position: relative;
+    padding: 0;
+  }
+
+  /* Deep Atmospheric Cosmic Background */
+  body::before {
+    content: '';
+    position: absolute;
+    top: 20%;
+    right: 15%;
+    width: 550px;
+    height: 550px;
+    background: radial-gradient(circle, rgba(14, 165, 233, 0.08) 0%, rgba(37, 99, 235, 0.03) 50%, transparent 75%);
+    filter: blur(80px);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  body::after {
+    content: '';
+    position: absolute;
+    bottom: 10%;
+    left: 10%;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, rgba(2, 132, 199, 0.05) 0%, transparent 70%);
+    filter: blur(90px);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Header Bar */
+  .header-bar {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    justify-content: space-between;
     align-items: center;
-    justify-content: center;
-    padding: 20px;
-  }}
-  .container {{
-    max-width: 620px;
+    padding: 28px 48px;
     width: 100%;
-    background: #111827;
-    border: 1px solid #1e293b;
-    border-radius: 12px;
-    padding: 40px;
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
-  }}
-  .header {{
+  }
+
+  .brand-group {
     display: flex;
     align-items: center;
     gap: 16px;
-    margin-bottom: 24px;
-    padding-bottom: 20px;
-    border-bottom: 1px solid #1e293b;
-  }}
-  .icon-wrapper {{
-    background: rgba(239, 68, 68, 0.1);
-    border: 1px solid rgba(239, 68, 68, 0.2);
-    border-radius: 10px;
-    width: 52px;
-    height: 52px;
+    text-decoration: none;
+  }
+
+  .logo-emblem {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+  }
+
+  .brand-text {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #ef4444;
-    font-size: 24px;
-  }}
-  .title-group h1 {{
+    flex-direction: column;
+    line-height: 1.15;
+  }
+
+  .brand-title {
     font-size: 20px;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    color: #ffffff;
+  }
+
+  .brand-sub {
+    font-size: 8.5px;
     font-weight: 700;
-    color: #f8fafc;
-    letter-spacing: -0.02em;
-  }}
-  .title-group p {{
-    font-size: 13px;
-    color: #64748b;
-    margin-top: 2px;
-  }}
-  .content {{
-    font-size: 14px;
-    line-height: 1.6;
+    letter-spacing: 0.16em;
     color: #94a3b8;
-    margin-bottom: 28px;
-  }}
-  .details-box {{
-    background: #0f172a;
-    border: 1px solid #1e293b;
-    border-radius: 8px;
-    padding: 16px 20px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    font-size: 12px;
-    color: #94a3b8;
-    margin-bottom: 24px;
-  }}
-  .details-row {{
-    display: flex;
-    justify-content: space-between;
-    padding: 6px 0;
-    border-bottom: 1px dashed #1e293b;
-  }}
-  .details-row:last-child {{
-    border-bottom: none;
-  }}
-  .label {{ color: #64748b; }}
-  .val {{ color: #e2e8f0; font-weight: 600; }}
-  .val-danger {{ color: #f87171; font-weight: 600; }}
-  .footer {{
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 12px;
-    color: #475569;
-    border-top: 1px solid #1e293b;
-    padding-top: 20px;
-  }}
-  .badge {{
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: rgba(59, 130, 246, 0.1);
-    border: 1px solid rgba(59, 130, 246, 0.2);
-    color: #60a5fa;
-    padding: 4px 10px;
-    border-radius: 9999px;
+    text-transform: uppercase;
+  }
+
+  .brand-agency {
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 0.22em;
+    color: #38bdf8;
+    text-transform: uppercase;
+  }
+
+  .header-divider {
+    width: 1px;
+    height: 28px;
+    background: rgba(255, 255, 255, 0.15);
+    margin: 0 10px;
+  }
+
+  .header-tagline {
     font-size: 11px;
     font-weight: 600;
-  }}
-</style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <div class="icon-wrapper">&#128683;</div>
-      <div class="title-group">
-        <h1>403 Forbidden</h1>
-        <p>Access Denied by Security Edge Policy</p>
-      </div>
-    </div>
-    
-    <div class="content">
-      Direct requests or unauthorized automated visits to this microservice endpoint are strictly restricted by enterprise firewall rules. If you are an active examination candidate, please access the platform through the official CBT portal application.
-    </div>
+    letter-spacing: 0.22em;
+    color: #64748b;
+    text-transform: uppercase;
+  }
 
-    <div class="details-box">
-      <div class="details-row">
-        <span class="label">Reason</span>
-        <span class="val-danger">{escape(str(reason))}</span>
-      </div>
-      <div class="details-row">
-        <span class="label">Client IP</span>
-        <span class="val">{escape(str(client_ip))}</span>
-      </div>
-      <div class="details-row">
-        <span class="label">Ray ID</span>
-        <span class="val">{escape(str(ray_id))}</span>
-      </div>
-      <div class="details-row">
-        <span class="label">Timestamp</span>
-        <span class="val">{timestamp}</span>
-      </div>
-    </div>
-
-    <div class="footer">
-      <span>Protected by HRTA Edge Shield</span>
-      <span class="badge">&bull; Security Active</span>
-    </div>
-  </div>
-</body>
-</html>"""
-
-
-def build_proctor_landing_page(client_ip: str, ray_id: str) -> str:
-    """
-    Renders an official, authoritative NTA/HRTA Cloud AI Proctoring Node
-    operational status terminal for proctor.hrtacbt.in.
-    """
-    timestamp = time.strftime("%a, %d %b %Y %H:%M:%S GMT", time.gmtime())
-
-    return f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>HRTA Cloud AI Proctoring Node — Operational 24/7</title>
-<style>
-  * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-  body {{
-    background-color: #070a13;
-    color: #cbd5e1;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 24px;
-  }}
-  .container {{
-    max-width: 680px;
-    width: 100%;
-    background: #0f172a;
-    border: 1px solid #1e293b;
-    border-radius: 16px;
-    padding: 36px;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
-  }}
-  .badge-row {{
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-  }}
-  .brand-badge {{
+  .shield-badge {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    background: rgba(14, 165, 233, 0.1);
-    border: 1px solid rgba(14, 165, 233, 0.3);
+    color: #94a3b8;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-decoration: none;
+    transition: color 0.2s ease;
+  }
+
+  .shield-badge:hover {
     color: #38bdf8;
-    padding: 6px 12px;
-    border-radius: 9999px;
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }}
-  .live-indicator {{
-    display: inline-flex;
+  }
+
+  .shield-icon {
+    width: 16px;
+    height: 16px;
+    stroke: #38bdf8;
+  }
+
+  /* Main Stage Container */
+  .main-stage {
+    position: relative;
+    z-index: 10;
+    max-width: 1320px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 20px 48px;
+    display: grid;
+    grid-template-columns: 1.15fr 0.85fr;
+    align-items: center;
+    gap: 40px;
+    flex-grow: 1;
+  }
+
+  /* Left Hero Content */
+  .hero-content {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .code-display {
+    display: flex;
     align-items: center;
     gap: 6px;
-    color: #34d399;
-    font-size: 12px;
-    font-weight: 700;
-    text-transform: uppercase;
-  }}
-  .pulse-dot {{
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #10b981;
-    box-shadow: 0 0 10px #10b981;
-    animation: pulse 2s infinite;
-  }}
-  @keyframes pulse {{
-    0%, 100% {{ opacity: 1; transform: scale(1); }}
-    50% {{ opacity: 0.5; transform: scale(1.2); }}
-  }}
-  h1 {{
-    font-size: 22px;
+    margin-bottom: 24px;
+  }
+
+  .digit {
+    font-size: 115px;
+    font-weight: 900;
+    line-height: 0.9;
+    letter-spacing: -0.04em;
+    color: #ffffff;
+    text-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  }
+
+  .center-badge {
+    width: 92px;
+    height: 92px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    filter: drop-shadow(0 0 25px rgba(14, 165, 233, 0.5));
+    animation: gentlePulse 4s ease-in-out infinite;
+  }
+
+  @keyframes gentlePulse {
+    0%, 100% { transform: scale(1); filter: drop-shadow(0 0 20px rgba(14, 165, 233, 0.4)); }
+    50% { transform: scale(1.03); filter: drop-shadow(0 0 35px rgba(56, 189, 248, 0.7)); }
+  }
+
+  .hero-title {
+    font-size: 42px;
     font-weight: 800;
-    color: #f8fafc;
-    letter-spacing: -0.02em;
-    margin-bottom: 6px;
-  }}
-  .subtitle {{
-    font-size: 13px;
+    line-height: 1.18;
+    letter-spacing: -0.025em;
+    color: #ffffff;
+    margin-bottom: 16px;
+  }
+
+  .hero-title .accent-text {
+    color: #38bdf8;
+    background: linear-gradient(135deg, #38bdf8 0%, #60a5fa 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .hero-desc {
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1.65;
     color: #94a3b8;
-    margin-bottom: 24px;
-    line-height: 1.5;
-  }}
-  .grid {{
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    max-width: 480px;
+    margin-bottom: 36px;
+  }
+
+  .back-btn {
+    display: inline-flex;
+    align-items: center;
     gap: 12px;
-    margin-bottom: 24px;
-  }}
-  .card {{
-    background: #090e1a;
-    border: 1px solid #1e293b;
-    border-radius: 10px;
-    padding: 14px;
-  }}
-  .card-label {{
-    font-size: 11px;
-    color: #64748b;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 4px;
-  }}
-  .card-value {{
-    font-size: 13px;
-    font-weight: 700;
-    color: #f1f5f9;
-  }}
-  .card-value.green {{ color: #34d399; }}
-  .card-value.cyan {{ color: #38bdf8; }}
-  .details-box {{
-    background: #090e1a;
-    border: 1px solid #1e293b;
-    border-radius: 10px;
-    padding: 14px 18px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    font-size: 12px;
-    color: #94a3b8;
-    margin-bottom: 24px;
-  }}
-  .details-row {{
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding: 13px 30px;
+    border-radius: 9999px;
+    text-decoration: none;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    backdrop-filter: blur(12px);
+  }
+
+  .back-btn:hover {
+    border-color: #38bdf8;
+    background: rgba(14, 165, 233, 0.15);
+    box-shadow: 0 0 25px rgba(14, 165, 233, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    transform: translateY(-2px);
+  }
+
+  .back-btn svg {
+    transition: transform 0.2s ease;
+  }
+
+  .back-btn:hover svg {
+    transform: translateX(-4px);
+  }
+
+  /* Right Visual Stage */
+  .visual-stage {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+  }
+
+  .illustration-svg {
+    width: 100%;
+    max-width: 520px;
+    height: auto;
+    filter: drop-shadow(0 25px 40px rgba(0, 0, 0, 0.8));
+    animation: gentleFloat 6s ease-in-out infinite;
+  }
+
+  @keyframes gentleFloat {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-8px); }
+  }
+
+  /* Footer Bar */
+  .footer-bar {
+    position: relative;
+    z-index: 10;
     display: flex;
     justify-content: space-between;
-    padding: 5px 0;
-    border-bottom: 1px dashed #1e293b;
-  }}
-  .details-row:last-child {{ border-bottom: none; }}
-  .action-btn {{
-    display: block;
+    align-items: center;
+    padding: 24px 48px;
     width: 100%;
-    text-align: center;
-    background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
-    color: #ffffff;
-    font-weight: 700;
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 12px 20px;
-    border-radius: 10px;
-    text-decoration: none;
-    transition: opacity 0.2s;
-  }}
-  .action-btn:hover {{ opacity: 0.9; }}
-  .footer {{
-    margin-top: 20px;
-    text-align: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 11px;
     color: #475569;
-  }}
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+
+  .footer-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .footer-line {
+    width: 24px;
+    height: 1px;
+    background: #334155;
+  }
+
+  /* Responsive Design */
+  @media (max-width: 960px) {
+    .header-bar {
+      padding: 20px 24px;
+    }
+    .header-divider, .header-tagline {
+      display: none;
+    }
+    .main-stage {
+      grid-template-columns: 1fr;
+      padding: 20px 24px;
+      text-align: center;
+      gap: 32px;
+    }
+    .hero-content {
+      align-items: center;
+    }
+    .digit {
+      font-size: 85px;
+    }
+    .center-badge {
+      width: 68px;
+      height: 68px;
+    }
+    .hero-title {
+      font-size: 30px;
+    }
+    .hero-desc {
+      font-size: 14px;
+      margin-bottom: 28px;
+    }
+    .illustration-svg {
+      max-width: 360px;
+    }
+    .footer-bar {
+      flex-direction: column;
+      gap: 12px;
+      text-align: center;
+      padding: 20px 24px;
+    }
+  }
 </style>
 </head>
 <body>
-  <div class="container">
-    <div class="badge-row">
-      <span class="brand-badge">HRTA &bull; National Testing Architecture</span>
-      <span class="live-indicator"><span class="pulse-dot"></span> Online 24/7</span>
+
+  <!-- Top Navigation Bar -->
+  <header class="header-bar">
+    <a href="https://hrtacbt.in" class="brand-group">
+      <svg class="logo-emblem" viewBox="0 0 100 100" fill="none">
+        <circle cx="50" cy="50" r="46" fill="url(#hrta_p_bg)" stroke="#18d8ee" stroke-width="2.5"/>
+        <circle cx="50" cy="50" r="42" fill="none" stroke="#0878e8" stroke-width="1.5" opacity="0.6"/>
+        <circle cx="50" cy="40" r="18" fill="#087ff0" opacity="0.3" filter="blur(6px)"/>
+        <path d="M32 28 H43 V40 H57 V28 H68 V72 H57 V52 H43 V72 H32 Z" fill="url(#hrta_p_h)"/>
+        <circle cx="70" cy="30" r="4" fill="#11e7f4"/>
+        <defs>
+          <radialGradient id="hrta_p_bg" cx="50%" cy="45%" r="65%">
+            <stop offset="0%" stop-color="#06234a"/>
+            <stop offset="70%" stop-color="#031328"/>
+            <stop offset="100%" stop-color="#010711"/>
+          </radialGradient>
+          <linearGradient id="hrta_p_h" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#ffffff"/>
+            <stop offset="100%" stop-color="#a5e5ff"/>
+          </linearGradient>
+        </defs>
+      </svg>
+      <div class="brand-text">
+        <span class="brand-title">HRTA</span>
+        <span class="brand-sub">HARMAN RATHI</span>
+        <span class="brand-agency">TESTING AGENCY</span>
+      </div>
+    </a>
+
+    <div style="display:flex; align-items:center;">
+      <div class="header-divider"></div>
+      <div class="header-tagline">SECURE &nbsp;|&nbsp; EXAMINATIONS &nbsp;|&nbsp; PROCTORING</div>
     </div>
 
-    <h1>Autonomous AI Cloud Proctoring Engine</h1>
-    <p class="subtitle">
-      Dedicated real-time Computer Vision proctoring microservice powering high-integrity NTA standard examinations on <strong>hrtacbt.in</strong>.
-    </p>
+    <a href="https://hrtacbt.in" class="shield-badge">
+      <svg class="shield-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+      <span>HRTA Proctors</span>
+    </a>
+  </header>
 
-    <div class="grid">
-      <div class="card">
-        <div class="card-label">Visual Engine</div>
-        <div class="card-value cyan">MediaPipe 3D Pose & Mesh</div>
+  <!-- Main Hero Stage -->
+  <main class="main-stage">
+    
+    <!-- Left Column: Typography & Action -->
+    <section class="hero-content">
+      <div class="code-display">
+        <span class="digit">4</span>
+        <div class="center-badge">
+          <svg width="100%" height="100%" viewBox="0 0 100 100" fill="none">
+            <circle cx="50" cy="50" r="46" fill="#0284c7" opacity="0.3" filter="blur(10px)"/>
+            <circle cx="50" cy="50" r="46" fill="url(#p_badge_404)" stroke="#38bdf8" stroke-width="3"/>
+            <circle cx="50" cy="50" r="40" stroke="#0284c7" stroke-width="1.5" opacity="0.8"/>
+            <circle cx="50" cy="38" r="16" fill="#38bdf8" opacity="0.25" filter="blur(6px)"/>
+            <path d="M32 27 H43 V41 H57 V27 H68 V73 H57 V53 H43 V73 H32 Z" fill="url(#p_h_404)"/>
+            <circle cx="70" cy="28" r="4.5" fill="#38bdf8"/>
+            <defs>
+              <radialGradient id="p_badge_404" cx="50%" cy="45%" r="60%">
+                <stop offset="0%" stop-color="#0c4a6e"/>
+                <stop offset="60%" stop-color="#082f49"/>
+                <stop offset="100%" stop-color="#020617"/>
+              </radialGradient>
+              <linearGradient id="p_h_404" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#ffffff"/>
+                <stop offset="100%" stop-color="#bae6fd"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <span class="digit">4</span>
       </div>
-      <div class="card">
-        <div class="card-label">Rough Work Tolerance</div>
-        <div class="card-value green">75s Calibrated Window</div>
-      </div>
-      <div class="card">
-        <div class="card-label">Edge Shield</div>
-        <div class="card-value green">Cloudflare WAF Tier A/B</div>
-      </div>
-      <div class="card">
-        <div class="card-label">Uptime Sentinel</div>
-        <div class="card-value green">Keep-Alive 24&times;7 Active</div>
-      </div>
+
+      <h1 class="hero-title">
+        The page you're looking for<br/>
+        <span class="accent-text">doesn't exist.</span>
+      </h1>
+
+      <p class="hero-desc">
+        The requested URL was not found on this server.<br/>
+        That's all we know.
+      </p>
+
+      <a href="https://hrtacbt.in" class="back-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+        <span>Go back home</span>
+      </a>
+    </section>
+
+    <!-- Right Column: 3D Console & Orbital Ring Illustration -->
+    <section class="visual-stage">
+      <svg class="illustration-svg" viewBox="0 0 520 460" fill="none">
+        <!-- Ambient Backlight -->
+        <circle cx="340" cy="220" r="140" fill="#0284c7" opacity="0.16" filter="blur(55px)"/>
+        
+        <!-- Asteroid Rock Pedestal -->
+        <g class="asteroid-base">
+          <ellipse cx="320" cy="385" rx="150" ry="32" fill="#000000" opacity="0.95" filter="blur(18px)"/>
+          <path d="M190 340 L240 295 L310 280 L380 290 L440 330 L450 370 L390 410 L290 420 L210 395 Z" fill="#090d16" stroke="#1e293b" stroke-width="1.5"/>
+          <path d="M240 295 L310 280 L320 330 L250 350 Z" fill="#131d2e" stroke="#1e293b" stroke-width="1"/>
+          <path d="M310 280 L380 290 L390 340 L320 330 Z" fill="#182338" stroke="#334155" stroke-width="1"/>
+          <path d="M380 290 L440 330 L420 370 L390 340 Z" fill="#0f172a" stroke="#1e293b" stroke-width="1"/>
+          <path d="M250 350 L320 330 L340 390 L270 400 Z" fill="#0c1322" stroke="#1e293b" stroke-width="1"/>
+          <path d="M320 330 L390 340 L380 395 L340 390 Z" fill="#162033" stroke="#2563eb" stroke-width="0.8" opacity="0.8"/>
+          <!-- Specular Light Edge Highlight -->
+          <path d="M240 295 L310 280 L380 290" stroke="#38bdf8" stroke-width="2" opacity="0.8" filter="drop-shadow(0 0 5px #38bdf8)"/>
+        </g>
+
+        <!-- Floating Cosmic Debris -->
+        <g class="floating-debris">
+          <polygon points="170,260 178,252 184,262 176,270" fill="#1e293b" stroke="#38bdf8" stroke-width="0.8" opacity="0.85"/>
+          <polygon points="450,270 460,265 464,276 454,282" fill="#0f172a" stroke="#475569" stroke-width="0.8"/>
+          <polygon points="460,180 466,174 472,182 464,188" fill="#1e293b" stroke="#38bdf8" stroke-width="0.8" opacity="0.9"/>
+          <polygon points="140,210 148,204 152,214 144,218" fill="#1e293b" stroke="#334155" stroke-width="0.8"/>
+        </g>
+
+        <!-- Orbital Ring: Back Arc -->
+        <path d="M140 270 C160 210, 420 160, 470 200" stroke="#0ea5e9" stroke-width="3.5" stroke-linecap="round" opacity="0.4"/>
+
+        <!-- Floating Glass Console Window -->
+        <g class="floating-terminal" filter="drop-shadow(0 20px 35px rgba(0,0,0,0.9))">
+          <rect x="230" y="110" width="180" height="170" rx="20" fill="url(#p_term_body)" stroke="#38bdf8" stroke-width="1.5" stroke-opacity="0.45"/>
+          <!-- Top Window Bar -->
+          <path d="M230 130 C230 119, 239 110, 250 110 H390 C401 110, 410 119, 410 130 V140 H230 Z" fill="#0f172a" fill-opacity="0.85"/>
+          <!-- Window Controls -->
+          <circle cx="248" cy="125" r="3.5" fill="#64748b"/>
+          <circle cx="260" cy="125" r="3.5" fill="#475569"/>
+          <circle cx="272" cy="125" r="3.5" fill="#334155"/>
+          
+          <!-- Diagonal Glass Sheen Reflection -->
+          <path d="M240 145 L320 145 L270 270 L240 270 Z" fill="url(#p_specular_sweep)" opacity="0.12"/>
+          
+          <!-- Minimal Emoticon Face: | _ | in crisp glowing white -->
+          <g class="terminal-face">
+            <line x1="285" y1="190" x2="285" y2="208" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round" filter="drop-shadow(0 0 6px #ffffff)"/>
+            <line x1="355" y1="190" x2="355" y2="208" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round" filter="drop-shadow(0 0 6px #ffffff)"/>
+            <line x1="306" y1="226" x2="334" y2="226" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round" filter="drop-shadow(0 0 6px #ffffff)"/>
+          </g>
+        </g>
+
+        <!-- Orbital Ring: Front Arc with Neon Glow -->
+        <path d="M470 200 C500 240, 200 320, 140 270" stroke="#38bdf8" stroke-width="3.5" stroke-linecap="round" filter="drop-shadow(0 0 10px #38bdf8)"/>
+        
+        <!-- Glowing Celestial Blue Sphere on the orbital ring -->
+        <g class="orbital-sphere" filter="drop-shadow(0 0 12px #38bdf8)">
+          <circle cx="458" cy="224" r="10" fill="url(#p_sphere_grad)"/>
+          <circle cx="455" cy="221" r="3" fill="#ffffff" opacity="0.85"/>
+        </g>
+
+        <defs>
+          <linearGradient id="p_term_body" x1="230" y1="110" x2="410" y2="280" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#0f172a" stop-opacity="0.95"/>
+            <stop offset="50%" stop-color="#090d16" stop-opacity="0.98"/>
+            <stop offset="100%" stop-color="#020617"/>
+          </linearGradient>
+          <linearGradient id="p_specular_sweep" x1="240" y1="145" x2="320" y2="270" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#ffffff"/>
+            <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+          </linearGradient>
+          <radialGradient id="p_sphere_grad" cx="40%" cy="35%" r="65%">
+            <stop offset="0%" stop-color="#bae6fd"/>
+            <stop offset="45%" stop-color="#38bdf8"/>
+            <stop offset="100%" stop-color="#0284c7"/>
+          </radialGradient>
+        </defs>
+      </svg>
+    </section>
+
+  </main>
+
+  <!-- Bottom Institutional Footer Bar -->
+  <footer class="footer-bar">
+    <div class="footer-left">
+      <div class="footer-line"></div>
+      <span>HRTA SECURE SYSTEMS</span>
+      <div class="footer-line"></div>
     </div>
-
-    <div class="details-box">
-      <div class="details-row">
-        <span>Endpoint Node</span>
-        <span style="color:#f1f5f9; font-weight:600;">proctor.hrtacbt.in</span>
-      </div>
-      <div class="details-row">
-        <span>Your IP Address</span>
-        <span style="color:#f1f5f9;">{escape(str(client_ip))}</span>
-      </div>
-      <div class="details-row">
-        <span>Cloudflare Ray ID</span>
-        <span style="color:#38bdf8;">{escape(str(ray_id))}</span>
-      </div>
-      <div class="details-row">
-        <span>Server Time</span>
-        <span style="color:#94a3b8;">{timestamp}</span>
-      </div>
+    <div class="footer-right">
+      <span>BUILT FOR A SAFER EXAMINATION TOMORROW</span>
     </div>
+  </footer>
 
-    <a href="https://hrtacbt.in" class="action-btn">Launch Official HRTA CBT Portal</a>
-
-    <div class="footer">
-      Harman Rathi Testing Agency (HRTA) &bull; National Examination Security Architecture &bull; All Rights Reserved
-    </div>
-  </div>
 </body>
 </html>"""
+
+
+def build_forbidden_html_page(client_ip: str = "", ray_id: str = "", reason: str = "") -> str:
+    """Returns the sovereign 404 stealth interface on unauthorized / direct browser access."""
+    return STEALTH_404_HTML
+
+
+def build_proctor_landing_page(client_ip: str = "", ray_id: str = "") -> str:
+    """Returns the sovereign 404 stealth interface for direct visits to proctor subdomain."""
+    return STEALTH_404_HTML
 
 
 def is_direct_browser_request(headers: Dict[str, str]) -> bool:
@@ -429,15 +602,19 @@ def verify_cloudflare_edge_shield(headers: Dict[str, str], path: str, client_ip:
         ""
     ).strip()
 
-    if not expected_secret:
-        return False, "Cloudflare edge secret is not configured."
-
     # TIER A: Secret token configured & matched
     if expected_secret and incoming_secret:
         if hmac.compare_digest(expected_secret.encode("utf-8"), incoming_secret.encode("utf-8")):
             return True, "TIER_A_TOKEN_VERIFIED"
 
-    return False, "Direct origin access forbidden: Invalid Cloudflare edge secret."
+    # TIER B: Cloudflare headers presence check
+    cf_ip = headers.get("cf-connecting-ip")
+    cf_ray = headers.get("cf-ray")
+    if cf_ip and cf_ray:
+        return True, "TIER_B_CF_HEADERS_VERIFIED"
+
+    # TIER C: Direct attack / bypass attempt
+    return False, "Direct origin access forbidden: Missing mandatory edge security headers."
 
 
 def verify_monitoring_authorization(authorization: Optional[str]) -> bool:
@@ -541,7 +718,7 @@ def verify_exam_session_token(token: str, expected_exam_id: str, expected_studen
 
     token_exam_id, token_student_id, timestamp_str, signature = parts
 
-    if token_exam_id != expected_exam_id or token_student_id != expected_student_id:
+    if token_exam_id.strip() != expected_exam_id.strip() or token_student_id.strip().lower() != expected_student_id.strip().lower():
         return False, "Exam session token does not match the active candidate and exam."
 
     try:
@@ -550,22 +727,33 @@ def verify_exam_session_token(token: str, expected_exam_id: str, expected_studen
         return False, "Invalid timestamp in session token."
 
     now_ms = int(time.time() * 1000)
-    # 24-hour validity window with 5 min future clock skew tolerance
-    if (now_ms - timestamp_ms) > (24 * 60 * 60 * 1000) or timestamp_ms > (now_ms + 5 * 60 * 1000):
+    # 24-hour validity window with 15 min future clock skew tolerance
+    if (now_ms - timestamp_ms) > (24 * 60 * 60 * 1000) or timestamp_ms > (now_ms + 15 * 60 * 1000):
         return False, "Exam session token has expired. Please re-verify login."
 
-    secret = settings.SUPER_ADMIN_SECRET
-    if not secret:
+    secret_candidates = [
+        s for s in (
+            settings.SUPER_ADMIN_SECRET.strip(),
+            getattr(settings, "JWT_SECRET", "").strip(),
+        ) if s
+    ]
+
+    if not secret_candidates:
         # If secret is unconfigured during initial dev setup, allow with warning
         return True, "DEV_MODE_NO_SECRET"
 
-    expected_sig = hmac.new(
-        secret.encode("utf-8"),
-        f"{token_exam_id}:{token_student_id}:{timestamp_ms}".encode("utf-8"),
-        hashlib.sha256
-    ).hexdigest()
+    matched = False
+    for candidate in secret_candidates:
+        expected_sig = hmac.new(
+            candidate.encode("utf-8"),
+            f"{token_exam_id}:{token_student_id}:{timestamp_ms}".encode("utf-8"),
+            hashlib.sha256
+        ).hexdigest()
+        if hmac.compare_digest(signature.lower(), expected_sig.lower()):
+            matched = True
+            break
 
-    if not hmac.compare_digest(signature.lower(), expected_sig.lower()):
+    if not matched:
         return False, "Cryptographic signature forgery detected in exam session token."
 
     return True, "AUTHENTIC_SESSION"
