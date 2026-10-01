@@ -6,6 +6,8 @@ import secrets
 from typing import Tuple, Optional, Dict, List
 from .config import settings
 
+MONITORING_ENDPOINT_PATH = "/internal/monitor"
+
 # Rate Limiter State (In-Memory Sliding Window)
 _rate_limit_records: Dict[str, List[float]] = {}
 _last_cleanup_time: float = time.time()
@@ -415,7 +417,7 @@ def verify_cloudflare_edge_shield(headers: Dict[str, str], path: str, client_ip:
         return True, "DEV_BYPASS"
 
     # Health check path exemption for internal uptime monitoring
-    if path in ("/health", "/api/health", "/robots.txt", "/favicon.ico"):
+    if path in ("/health", "/api/health", "/robots.txt", "/favicon.ico", MONITORING_ENDPOINT_PATH):
         return True, "EXEMPT_PATH"
 
     expected_secret = settings.CLOUDFLARE_SECRET_TOKEN.strip()
@@ -439,6 +441,22 @@ def verify_cloudflare_edge_shield(headers: Dict[str, str], path: str, client_ip:
 
     # TIER C: Direct attack / bypass attempt
     return False, "Direct origin access forbidden: Missing mandatory edge security headers."
+
+
+def verify_monitoring_authorization(authorization: Optional[str]) -> bool:
+    """Verify the dedicated monitoring bearer token without accepting query parameters."""
+    expected_secret = settings.MONITORING_ENDPOINT_SECRET
+    if not expected_secret or not authorization:
+        return False
+
+    parts = authorization.split(" ")
+    if len(parts) != 2 or parts[0].lower() != "bearer" or not parts[1]:
+        return False
+
+    return hmac.compare_digest(
+        expected_secret.encode("utf-8"),
+        parts[1].encode("utf-8")
+    )
 
 
 def is_valid_host(host_header: Optional[str]) -> bool:

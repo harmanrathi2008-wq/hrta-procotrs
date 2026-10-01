@@ -31,5 +31,6 @@ uvicorn main:app --reload --port 8000
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
    - `SUPER_ADMIN_SECRET`
+   - `MONITORING_ENDPOINT_SECRET` (token used in the HTTP Authorization Bearer header for `/internal/monitor`)
    - `MAIN_API_URL`
 4. Set Cloudflare CNAME `proctor` -> `<your-render-subdomain>.onrender.com`.

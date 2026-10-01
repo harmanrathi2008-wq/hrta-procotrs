@@ -16,7 +16,9 @@ from core.security import (
     is_valid_host,
     is_valid_origin,
     check_rate_limit,
-    verify_exam_session_token
+    verify_exam_session_token,
+    verify_monitoring_authorization,
+    MONITORING_ENDPOINT_PATH
 )
 from core.vision_detector import analyze_proctor_frame
 from core.db_sync import record_proctoring_violation
@@ -119,7 +121,7 @@ async def hrta_edge_security_middleware(request: Request, call_next):
         )
 
     # 6. Sliding Window Rate Limiting (Skip for internal health checks)
-    if path not in ("/health", "/api/health"):
+    if path not in ("/health", "/api/health", MONITORING_ENDPOINT_PATH):
         if not check_rate_limit(client_ip):
             return JSONResponse(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -201,6 +203,18 @@ def health_check():
         "service": "HRTA_PROCTOR_ENGINE",
         "uptime": "operational"
     }
+
+
+@app.get(MONITORING_ENDPOINT_PATH)
+def monitoring_check(authorization: Optional[str] = Header(None)):
+    """Minimal authenticated availability probe for external monitoring."""
+    if not verify_monitoring_authorization(authorization):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden"
+        )
+
+    return {"status": "ok"}
 
 
 @app.post("/api/v1/proctor/inspect")

@@ -13,6 +13,7 @@ try:
         SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
         SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
         SUPER_ADMIN_SECRET: str = os.getenv("SUPER_ADMIN_SECRET", "")
+        MONITORING_ENDPOINT_SECRET: str = os.getenv("MONITORING_ENDPOINT_SECRET", "")
         MAIN_API_URL: str = os.getenv("MAIN_API_URL", "https://api.hrtacbt.in")
         CLOUDFLARE_SECRET_TOKEN: str = os.getenv("CLOUDFLARE_SECRET_TOKEN", "")
         
@@ -54,6 +55,7 @@ except ImportError:
         SUPABASE_URL: str = os.getenv("SUPABASE_URL", "")
         SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
         SUPER_ADMIN_SECRET: str = os.getenv("SUPER_ADMIN_SECRET", "")
+        MONITORING_ENDPOINT_SECRET: str = os.getenv("MONITORING_ENDPOINT_SECRET", "")
         MAIN_API_URL: str = os.getenv("MAIN_API_URL", "https://api.hrtacbt.in")
         CLOUDFLARE_SECRET_TOKEN: str = os.getenv("CLOUDFLARE_SECRET_TOKEN", "")
         ROUGH_WORK_TOLERANCE_SECONDS: int = int(os.getenv("ROUGH_WORK_TOLERANCE_SECONDS", "75"))
